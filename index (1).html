@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pitch Glider — MIDI Pitch Slide Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0d;
+  --surface: #111116;
+  --panel: #16161d;
+  --border: #22222d;
+  --accent: #7c6fcd;
+  --accent2: #b8aef0;
+  --accent3: #4ade9e;
+  --cream: #e8e4f8;
+  --muted: #44445a;
+  --text: #c8c4e0;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-weight: 300;
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* ── NAV ─────────────────────────────────────────────────────────────────── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 48px;
+  background: rgba(10,10,13,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--cream);
+  letter-spacing: -0.5px;
+}
+
+.nav-logo span { color: var(--accent); }
+
+.nav-links {
+  display: flex;
+  gap: 36px;
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover { color: var(--cream); }
+
+.nav-cta {
+  background: var(--accent);
+  color: var(--cream);
+  border: none;
+  padding: 10px 24px;
+  border-radius: 4px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.nav-cta:hover { background: var(--accent2); transform: translateY(-1px); }
+
+/* ── HERO ────────────────────────────────────────────────────────────────── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 120px 24px 80px;
+  position: relative;
+}
+
+.hero-badge {
+  display: inline-block;
+  border: 1px solid var(--accent);
+  color: var(--accent2);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  border-radius: 2px;
+  margin-bottom: 32px;
+  animation: fadeUp 0.6s ease both;
+}
+
+.hero h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(52px, 9vw, 112px);
+  line-height: 1.0;
+  color: var(--cream);
+  letter-spacing: -3px;
+  margin-bottom: 8px;
+  animation: fadeUp 0.6s 0.1s ease both;
+}
+
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.hero-sub {
+  font-size: clamp(13px, 2vw, 16px);
+  color: var(--muted);
+  max-width: 480px;
+  margin: 20px auto 48px;
+  letter-spacing: 0.5px;
+  animation: fadeUp 0.6s 0.2s ease both;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  animation: fadeUp 0.6s 0.3s ease both;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--cream);
+  border: none;
+  padding: 16px 40px;
+  border-radius: 4px;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover { background: var(--accent2); transform: translateY(-2px); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 16px 40px;
+  border-radius: 4px;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover { border-color: var(--accent); color: var(--cream); }
+
+.hero-price {
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  animation: fadeUp 0.6s 0.4s ease both;
+}
+
+.hero-price strong { color: var(--accent3); font-weight: 500; }
+
+/* ── ANIMATED CANVAS ─────────────────────────────────────────────────────── */
+.demo-canvas-wrap {
+  width: min(680px, 90vw);
+  margin: 60px auto 0;
+  animation: fadeUp 0.6s 0.5s ease both;
+}
+
+.demo-canvas {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  display: block;
+}
+
+/* ── FEATURES ────────────────────────────────────────────────────────────── */
+section { padding: 100px 24px; }
+
+.container { max-width: 1100px; margin: 0 auto; }
+
+.section-label {
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(32px, 5vw, 56px);
+  color: var(--cream);
+  line-height: 1.1;
+  letter-spacing: -1px;
+  margin-bottom: 20px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 60px;
+}
+
+.feature {
+  background: var(--surface);
+  padding: 40px 36px;
+  transition: background 0.2s;
+}
+
+.feature:hover { background: var(--panel); }
+
+.feature-icon {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.feature-icon svg { width: 18px; height: 18px; stroke: var(--accent); fill: none; stroke-width: 1.5; }
+
+.feature h3 {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cream);
+  margin-bottom: 10px;
+  letter-spacing: -0.3px;
+}
+
+.feature p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+/* ── CURVES SECTION ──────────────────────────────────────────────────────── */
+.curves-section {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.curves-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.curve-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px 16px;
+  text-align: center;
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+
+.curve-card:hover { border-color: var(--accent); }
+.curve-card.active { border-color: var(--accent); background: rgba(124,111,205,0.08); }
+
+.curve-card canvas { width: 100%; display: block; }
+
+.curve-name {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 12px;
+}
+
+.curve-card.active .curve-name { color: var(--accent2); }
+
+/* ── PRESETS ─────────────────────────────────────────────────────────────── */
+.presets-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin-top: 48px;
+}
+
+.preset-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: border-color 0.2s;
+  cursor: default;
+}
+
+.preset-item:hover { border-color: var(--accent); }
+
+.preset-name {
+  font-size: 12px;
+  color: var(--cream);
+  letter-spacing: 0.5px;
+}
+
+.preset-tag {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+/* ── PRICING ─────────────────────────────────────────────────────────────── */
+.pricing-card {
+  max-width: 440px;
+  margin: 60px auto 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pricing-top {
+  padding: 48px 48px 36px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pricing-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--cream);
+  margin-bottom: 8px;
+}
+
+.pricing-amount {
+  font-family: 'DM Serif Display', serif;
+  font-size: 72px;
+  color: var(--cream);
+  line-height: 1;
+  letter-spacing: -3px;
+}
+
+.pricing-amount sup {
+  font-size: 28px;
+  vertical-align: top;
+  margin-top: 14px;
+  display: inline-block;
+  color: var(--accent2);
+}
+
+.pricing-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+  letter-spacing: 1px;
+}
+
+.pricing-features {
+  padding: 36px 48px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pricing-features li {
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pricing-features li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent3);
+  flex-shrink: 0;
+}
+
+.pricing-cta {
+  display: block;
+  background: var(--accent);
+  color: var(--cream);
+  text-align: center;
+  text-decoration: none;
+  padding: 20px;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: background 0.2s;
+  margin: 0 48px 48px;
+  border-radius: 4px;
+}
+
+.pricing-cta:hover { background: var(--accent2); }
+
+/* ── COMPAT ──────────────────────────────────────────────────────────────── */
+.compat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+  justify-content: center;
+}
+
+.compat-badge {
+  border: 1px solid var(--border);
+  padding: 8px 20px;
+  border-radius: 3px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── FOOTER ──────────────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footer-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--cream);
+}
+
+.footer-logo span { color: var(--accent); }
+
+footer p {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+/* ── ANIMATIONS ──────────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+.reveal.visible { opacity: 1; transform: translateY(0); }
+
+/* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  nav { padding: 16px 20px; }
+  .nav-links { display: none; }
+  .curves-grid { grid-template-columns: repeat(3, 1fr); }
+  footer { padding: 32px 20px; text-align: center; justify-content: center; }
+  .pricing-top, .pricing-features, .pricing-cta { padding-left: 28px; padding-right: 28px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">Pitch<span>Glider</span></div>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#curves">Curves</a></li>
+    <li><a href="#presets">Presets</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+  </ul>
+  <a href="#pricing" class="nav-cta">Buy — $10</a>
+</nav>
+
+<!-- ── HERO ────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-badge">VST3 · Windows · MIDI Effect</div>
+  <h1>Every note<br><em>slides</em> into place</h1>
+  <p class="hero-sub">A MIDI pitch slide engine with curve-shaped glide, polyphonic voice tracking, and a live visualiser that shows you exactly what's happening.</p>
+  <div class="hero-actions">
+    <a href="#pricing" class="btn-primary">Buy Now — $10</a>
+    <a href="#features" class="btn-secondary">Learn More</a>
+  </div>
+  <p class="hero-price">One-time purchase · <strong>No subscription</strong> · Instant download</p>
+
+  <div class="demo-canvas-wrap">
+    <canvas class="demo-canvas" id="hero-canvas" height="180"></canvas>
+  </div>
+</section>
+
+<!-- ── FEATURES ────────────────────────────────────────────────────────── -->
+<section id="features">
+  <div class="container">
+    <div class="section-label reveal">What it does</div>
+    <h2 class="section-title reveal">Built different<br>from the ground up</h2>
+
+    <div class="features-grid reveal">
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 12 Q8 4 12 12 Q16 20 21 12"/></svg>
+        </div>
+        <h3>5 Glide Curves</h3>
+        <p>Exponential, ease-in, linear, ease-out, logarithmic. One knob shapes the entire character of your slide — from violin bow to trombone.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+        </div>
+        <h3>16-Voice Polyphonic</h3>
+        <p>Each voice has its own independent glide. Play chords and every note slides separately. Works with any polyphonic synthesiser.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        </div>
+        <h3>Pure MIDI</h3>
+        <p>Zero audio processing. No latency, no artefacts, no coloration. Works with any synth that accepts pitchbend — hardware or software.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M2 20h20M6 20V10l6-6 6 6v10"/></svg>
+        </div>
+        <h3>Live Visualiser</h3>
+        <p>Watch the glide curve animate in real time. A dot moves along the curve as you play — you see exactly where the pitch is at every moment.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3>Legato Mode</h3>
+        <p>Glide only when you hold notes and play a new one — exactly like a guitarist sliding up the neck. Off: every note glides from the last.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 22V12M12 12L8 16M12 12l4 4M4 7l8-5 8 5"/></svg>
+        </div>
+        <h3>Direction Filter</h3>
+        <p>Glide up only, down only, or both. Perfect for steel guitar (always glide up) or specific phrasing styles that only bend one way.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CURVES ───────────────────────────────────────────────────────────── -->
+<section id="curves" class="curves-section">
+  <div class="container">
+    <div class="section-label reveal">The core idea</div>
+    <h2 class="section-title reveal">Five ways to <em style="font-style:italic;color:var(--accent)">slide</em></h2>
+    <p class="reveal" style="max-width:520px;color:var(--muted);font-size:14px;">The curve is everything. The same 200ms glide sounds completely different depending on how it accelerates and decelerates.</p>
+
+    <div class="curves-grid reveal" id="curves-grid"></div>
+  </div>
+</section>
+
+<!-- ── PRESETS ──────────────────────────────────────────────────────────── -->
+<section id="presets">
+  <div class="container">
+    <div class="section-label reveal">Ready to play</div>
+    <h2 class="section-title reveal">10 factory presets</h2>
+    <p class="reveal" style="max-width:520px;color:var(--muted);font-size:14px;">Carefully tuned starting points. Load, play, adjust. Save your own with a name.</p>
+
+    <div class="presets-list reveal">
+      <div class="preset-item"><span class="preset-name">Default</span><span class="preset-tag">linear</span></div>
+      <div class="preset-item"><span class="preset-name">Smooth Legato</span><span class="preset-tag">legato</span></div>
+      <div class="preset-item"><span class="preset-name">Violin Slide</span><span class="preset-tag">exp</span></div>
+      <div class="preset-item"><span class="preset-name">Trombone</span><span class="preset-tag">log</span></div>
+      <div class="preset-item"><span class="preset-name">Synth Lead</span><span class="preset-tag">fast</span></div>
+      <div class="preset-item"><span class="preset-name">Neo-Soul Keys</span><span class="preset-tag">smooth</span></div>
+      <div class="preset-item"><span class="preset-name">Steel Guitar</span><span class="preset-tag">up only</span></div>
+      <div class="preset-item"><span class="preset-name">Slow Drift</span><span class="preset-tag">800ms</span></div>
+      <div class="preset-item"><span class="preset-name">Snap</span><span class="preset-tag">40ms</span></div>
+      <div class="preset-item"><span class="preset-name">Subtle</span><span class="preset-tag">50% mix</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRICING ──────────────────────────────────────────────────────────── -->
+<section id="pricing" style="background:var(--surface);border-top:1px solid var(--border);">
+  <div class="container" style="text-align:center;">
+    <div class="section-label reveal">Simple pricing</div>
+    <h2 class="section-title reveal">One price.<br>Yours forever.</h2>
+
+    <div class="pricing-card reveal">
+      <div class="pricing-top">
+        <div class="pricing-name">Pitch Glider</div>
+        <div class="pricing-amount"><sup>$</sup>10</div>
+        <div class="pricing-note">One-time · No subscription · No iLok</div>
+      </div>
+      <ul class="pricing-features">
+        <li>VST3 for Windows (Mac coming soon)</li>
+        <li>Lifetime free updates</li>
+        <li>10 factory presets included</li>
+        <li>Unlimited user presets</li>
+        <li>Works with any VST3 host</li>
+        <li>Instant download after purchase</li>
+      </ul>
+      <a href="https://gumroad.com" class="pricing-cta">Buy Now on Gumroad</a>
+    </div>
+
+    <div class="compat-row reveal">
+      <div class="compat-badge">Ableton Live</div>
+      <div class="compat-badge">FL Studio</div>
+      <div class="compat-badge">Reaper</div>
+      <div class="compat-badge">Cubase</div>
+      <div class="compat-badge">Studio One</div>
+      <div class="compat-badge">Bitwig</div>
+      <div class="compat-badge">+ any VST3 host</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-logo">Pitch<span>Glider</span></div>
+  <p>© 2026 OneWayneG Plugins · All rights reserved</p>
+  <p>contact@onewaynego.com</p>
+</footer>
+
+<script>
+// ── Hero canvas animation ─────────────────────────────────────────────────
+const heroCanvas = document.getElementById('hero-canvas');
+const hCtx = heroCanvas.getContext('2d');
+let hW, hH;
+
+function resizeHero() {
+  hW = heroCanvas.offsetWidth * window.devicePixelRatio;
+  hH = heroCanvas.offsetHeight * window.devicePixelRatio;
+  heroCanvas.width = hW;
+  heroCanvas.height = hH;
+}
+resizeHero();
+window.addEventListener('resize', resizeHero);
+
+let heroT = 0;
+let dotProgress = 0;
+let dotDir = 1;
+let activeCurve = 0; // 0=linear, goes through cycle
+
+const curves = [
+  { name: 'EXPONENTIAL',   fn: t => 1 - Math.pow(1-t, 4),         c: -1.0 },
+  { name: 'EXP EASE',      fn: t => 1 - Math.pow(1-t, 2.5),       c: -0.5 },
+  { name: 'LINEAR',        fn: t => t,                              c:  0.0 },
+  { name: 'LOG EASE',      fn: t => Math.pow(t, 2.5),              c:  0.5 },
+  { name: 'LOGARITHMIC',   fn: t => Math.pow(t, 4),                c:  1.0 },
+];
+
+function drawHero() {
+  hCtx.clearRect(0, 0, hW, hH);
+
+  const pad = 40 * window.devicePixelRatio;
+  const W = hW - pad * 2;
+  const H = hH - pad * 2;
+  const ox = pad, oy = pad;
+
+  // Grid
+  hCtx.strokeStyle = 'rgba(34,34,45,0.8)';
+  hCtx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    hCtx.beginPath();
+    hCtx.moveTo(ox + W * i/4, oy);
+    hCtx.lineTo(ox + W * i/4, oy + H);
+    hCtx.stroke();
+    hCtx.beginPath();
+    hCtx.moveTo(ox, oy + H * i/4);
+    hCtx.lineTo(ox + W, oy + H * i/4);
+    hCtx.stroke();
+  }
+
+  // Draw all 5 curves dimly, active one bright
+  curves.forEach((curve, idx) => {
+    const isActive = idx === activeCurve;
+    hCtx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const t = i / 200;
+      const y = curve.fn(t);
+      const px = ox + t * W;
+      const py = oy + H - y * H * 0.85 - H * 0.075;
+      i === 0 ? hCtx.moveTo(px, py) : hCtx.lineTo(px, py);
+    }
+    hCtx.strokeStyle = isActive
+      ? 'rgba(124,111,205,0.9)'
+      : 'rgba(124,111,205,0.12)';
+    hCtx.lineWidth = isActive ? 2.5 * window.devicePixelRatio : 1 * window.devicePixelRatio;
+    hCtx.stroke();
+
+    // Fill for active
+    if (isActive) {
+      hCtx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const t = i / 200;
+        const y = curve.fn(t);
+        const px = ox + t * W;
+        const py = oy + H - y * H * 0.85 - H * 0.075;
+        i === 0 ? hCtx.moveTo(px, py) : hCtx.lineTo(px, py);
+      }
+      hCtx.lineTo(ox + W, oy + H);
+      hCtx.lineTo(ox, oy + H);
+      hCtx.closePath();
+      hCtx.fillStyle = 'rgba(124,111,205,0.07)';
+      hCtx.fill();
+    }
+  });
+
+  // Moving dot
+  const activeFn = curves[activeCurve].fn;
+  const y = activeFn(dotProgress);
+  const dotX = ox + dotProgress * W;
+  const dotY = oy + H - y * H * 0.85 - H * 0.075;
+
+  hCtx.beginPath();
+  hCtx.arc(dotX, dotY, 6 * window.devicePixelRatio, 0, Math.PI * 2);
+  hCtx.fillStyle = '#e8e4f8';
+  hCtx.fill();
+  hCtx.strokeStyle = 'rgba(124,111,205,0.8)';
+  hCtx.lineWidth = 2 * window.devicePixelRatio;
+  hCtx.stroke();
+
+  // Vertical line from dot to bottom
+  hCtx.beginPath();
+  hCtx.moveTo(dotX, dotY);
+  hCtx.lineTo(dotX, oy + H);
+  hCtx.strokeStyle = 'rgba(124,111,205,0.2)';
+  hCtx.lineWidth = 1;
+  hCtx.setLineDash([4, 4]);
+  hCtx.stroke();
+  hCtx.setLineDash([]);
+
+  // Labels
+  hCtx.font = `${10 * window.devicePixelRatio}px 'DM Mono', monospace`;
+  hCtx.fillStyle = 'rgba(68,68,90,0.8)';
+  hCtx.fillText('START', ox + 4, oy + H - 4);
+  hCtx.fillText('END', ox + W - 36 * window.devicePixelRatio, oy + H - 4);
+  hCtx.fillStyle = 'rgba(184,174,240,0.7)';
+  hCtx.fillText(curves[activeCurve].name, ox + W - 120 * window.devicePixelRatio, oy + 16);
+}
+
+function heroLoop() {
+  heroT += 0.008;
+  dotProgress += dotDir * 0.006;
+  if (dotProgress >= 1) { dotProgress = 1; dotDir = -1; }
+  if (dotProgress <= 0) {
+    dotProgress = 0; dotDir = 1;
+    activeCurve = (activeCurve + 1) % curves.length;
+  }
+  drawHero();
+  requestAnimationFrame(heroLoop);
+}
+heroLoop();
+
+// ── Curves section mini canvases ─────────────────────────────────────────
+const curvesGrid = document.getElementById('curves-grid');
+curves.forEach((curve, idx) => {
+  const card = document.createElement('div');
+  card.className = 'curve-card' + (idx === 2 ? ' active' : '');
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 120; canvas.height = 80;
+  canvas.style.height = '80px';
+
+  const ctx = canvas.getContext('2d');
+
+  function drawMini() {
+    const W = 120, H = 80;
+    const pad = 12;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#16161d';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const t = i / 100;
+      const y = curve.fn(t);
+      const px = pad + t * (W - pad * 2);
+      const py = H - pad - y * (H - pad * 2);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = card.classList.contains('active')
+      ? 'rgba(124,111,205,1)'
+      : 'rgba(124,111,205,0.4)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  drawMini();
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.curve-card').forEach(c => {
+      c.classList.remove('active');
+      c.querySelector('canvas').getContext('2d').clearRect(0,0,120,80);
+    });
+    card.classList.add('active');
+    activeCurve = idx;
+    drawMini();
+    // Redraw all
+    document.querySelectorAll('.curve-card').forEach((c, i) => {
+      const cv = c.querySelector('canvas').getContext('2d');
+      const cf = curves[i];
+      const isA = c.classList.contains('active');
+      cv.clearRect(0,0,120,80);
+      cv.fillStyle = '#16161d'; cv.fillRect(0,0,120,80);
+      cv.beginPath();
+      for (let j = 0; j <= 100; j++) {
+        const t = j/100, y = cf.fn(t);
+        const px = 12 + t*96, py = 80-12-y*56;
+        j===0 ? cv.moveTo(px,py) : cv.lineTo(px,py);
+      }
+      cv.strokeStyle = isA ? 'rgba(124,111,205,1)' : 'rgba(124,111,205,0.4)';
+      cv.lineWidth = 2; cv.stroke();
+    });
+  });
+
+  const label = document.createElement('div');
+  label.className = 'curve-name';
+  label.textContent = curve.name;
+
+  card.appendChild(canvas);
+  card.appendChild(label);
+  curvesGrid.appendChild(card);
+});
+
+// ── Scroll reveal ─────────────────────────────────────────────────────────
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('visible'); }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
